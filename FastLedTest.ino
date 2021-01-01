@@ -300,7 +300,7 @@ void handle_set() {
     return;
   }
   String selection = server.arg("selection");
-  if (selection != "on" && selection != "off" && selection != "blink") {
+  if (selection != "on" && selection != "off") {
     Serial.println(F("Invalid selection parameter send by browser"));
   }
   
