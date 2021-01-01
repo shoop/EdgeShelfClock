@@ -130,9 +130,9 @@ void setup()
   templ.close();
 
   Serial.println(F("Starting webserver..."));
-  server.on("/", handle_connect);
-  server.on("/set", HTTP_POST, handle_set);
-  server.onNotFound(handle_notfound);
+  server.on("/", handleConnect);
+  server.on("/set", HTTP_POST, handleSet);
+  server.onNotFound(handleNotFound);
   server.begin();
 
   // Ready
@@ -272,31 +272,34 @@ void loop()
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 }
 
-void handle_connect() {
-  server.send(200, "text/html", generate_html()); 
+void handleConnect()
+{
+  server.send(200, "text/html", generateHtml()); 
 }
 
-void redirect_to_main() {
+void redirectToMain()
+{
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_set() {
+void handleSet()
+{
   if (!server.hasArg("lights")) {
     Serial.println(F("No lights parameter send by browser"));
-    redirect_to_main();
+    redirectToMain();
     return;
   }
   String lights = server.arg("lights");
   if (lights != "clock" && lights != "shelf") {
     Serial.println(F("Invalid lights parameter send by browser"));
-    redirect_to_main();
+    redirectToMain();
     return;
   }
 
   if (!server.hasArg("selection")) {
     Serial.println(F("No selection parameter send by browser"));
-    redirect_to_main();
+    redirectToMain();
     return;
   }
   String selection = server.arg("selection");
@@ -319,10 +322,11 @@ void handle_set() {
     }
   }
 
-  redirect_to_main();
+  redirectToMain();
 }
 
-void handle_notfound(){
+void handleNotFound()
+{
   server.send(404, "text/plain", "Not found");
 }
 
@@ -335,7 +339,8 @@ void append_post_button(String *html, String strip, String selection, String tex
         + "</form>\n";
 }
 
-String generate_html(){
+String generateHtml()
+{
   String ptr = "";
   ptr += prehtml;
   
