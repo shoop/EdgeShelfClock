@@ -82,8 +82,8 @@ void setup()
     conf.close();
   }
 
-  Serial.printf("Connecting to SSID \"%s\"", ssid);
-  WiFi.begin(ssid, password);
+  Serial.printf("Connecting to SSID \"%s\"", wifiData.ssid);
+  WiFi.begin(wifiData.ssid, wifiData.password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
