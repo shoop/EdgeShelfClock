@@ -142,12 +142,7 @@ void setup()
 
   Serial.println(F("Starting webserver..."));
   server.on("/", handle_connect);
-  server.on("/clockon", HTTP_POST, handle_clockon);
-  server.on("/clockblink", HTTP_POST, handle_clockblink);
-  server.on("/clockoff", HTTP_POST, handle_clockoff);
-  server.on("/shelfon", HTTP_POST, handle_shelfon);
-  server.on("/shelfblink", HTTP_POST, handle_shelfblink);
-  server.on("/shelfoff", HTTP_POST, handle_shelfoff);
+  server.on("/set", HTTP_POST, handle_set);
   server.onNotFound(handle_notfound);
   server.begin();
 
@@ -231,56 +226,67 @@ void handle_connect() {
   server.send(200, "text/html", generate_html()); 
 }
 
-void handle_clockon() {
-  clockstatus = On;
-  Serial.println("Clock: ON");
+void redirect_to_main() {
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_clockoff() {
-  clockstatus = Off;
-  Serial.println("Clock: OFF");
-  server.sendHeader("Location", String("/"), true);
-  server.send(302, "text/plain", "");
-}
+void handle_set() {
+  if (!server.hasArg("lights")) {
+    Serial.println(F("No lights parameter send by browser"));
+    redirect_to_main();
+    return;
+  }
+  String lights = server.arg("lights");
+  if (lights != "clock" && lights != "shelf") {
+    Serial.println(F("Invalid lights parameter send by browser"));
+    redirect_to_main();
+    return;
+  }
 
-void handle_clockblink() {
-  clockstatus = Blink;
-  Serial.println("Clock: Blink");
-  server.sendHeader("Location", String("/"), true);
-  server.send(302, "text/plain", "");
-}
+  if (!server.hasArg("selection")) {
+    Serial.println(F("No selection parameter send by browser"));
+    redirect_to_main();
+    return;
+  }
+  String selection = server.arg("selection");
+  if (selection != "on" && selection != "off" && selection != "blink") {
+    Serial.println(F("Invalid selection parameter send by browser"));
+  }
+  
+  Serial.printf("%s: %s\n", lights.c_str(), selection.c_str());
+  if (lights == "clock" ) {
+    if (selection == "on") {
+      clockstatus = On;
+    } else if (selection == "off") {
+      clockstatus = Off;
+    } else if (selection == "blink") {
+      clockstatus = Blink;
+    }
+  } else if (lights == "shelf") {
+    if (selection == "on") {
+      shelfstatus = On;
+    } else if (selection == "off") {
+      shelfstatus = Off;
+    } else if (selection == "blink") {
+      shelfstatus = Blink;
+    }
+  }
 
-void handle_shelfon() {
-  shelfstatus = On;
-  Serial.println("Shelf: ON");
-  server.sendHeader("Location", String("/"), true);
-  server.send(302, "text/plain", "");
-}
-
-void handle_shelfoff() {
-  shelfstatus = Off;
-  Serial.println("Shelf: OFF");
-  server.sendHeader("Location", String("/"), true);
-  server.send(302, "text/plain", "");
-}
-
-void handle_shelfblink() {
-  shelfstatus = Blink;
-  Serial.println("Shelf: Blink");
-  server.sendHeader("Location", String("/"), true);
-  server.send(302, "text/plain", "");
+  redirect_to_main();
 }
 
 void handle_notfound(){
   server.send(404, "text/plain", "Not found");
 }
 
-void append_post_button(String *html, String buttonClass, String URL, String text)
+void append_post_button(String *html, String strip, String selection, String text)
 {
-  *html += "<form method=\"post\" action=\"" + URL + "\"><button type=\"submit\" name=\"selection\" value=\"" + buttonClass + "\" class=\"button button-" + buttonClass + "\">"
-    + text + "</button></form>\n";
+  *html += "<form method=\"post\" action=\"/set\"><input type=\"hidden\" name=\"lights\" value=\"" + strip + "\">"
+        + "<button type=\"submit\" name=\"selection\" value=\"" + selection + "\" class=\"button button-" + selection + "\">"
+        + text
+        + "</button>"
+        + "</form>\n";
 }
 
 String generate_html(){
@@ -289,30 +295,30 @@ String generate_html(){
   
   if (clockstatus == On) {
     ptr +="<p>Clock Status: ON</p>";
-    append_post_button(&ptr, "off", "/clockoff", "OFF");
-    append_post_button(&ptr, "blink", "/clockblink", "BLINK");
+    append_post_button(&ptr, "clock", "off", "OFF");
+    append_post_button(&ptr, "clock", "blink", "BLINK");
   } else if (clockstatus == Off) {
     ptr +="<p>Clock Status: OFF</p>";
-    append_post_button(&ptr, "on", "/clockon", "ON");
-    append_post_button(&ptr, "blink", "/clockblink", "BLINK");
+    append_post_button(&ptr, "clock", "on", "ON");
+    append_post_button(&ptr, "clock", "blink", "BLINK");
   } else {
     ptr +="<p>Clock Status: BLINK</p>";
-    append_post_button(&ptr, "on", "/clockon", "ON");
-    append_post_button(&ptr, "off", "/clockoff", "OFF");
+    append_post_button(&ptr, "clock", "on", "ON");
+    append_post_button(&ptr, "clock", "off", "OFF");
   }
 
   if (shelfstatus == On) {
     ptr +="<p>Shelf Status: ON</p>";
-    append_post_button(&ptr, "off", "/shelfoff", "OFF");
-    append_post_button(&ptr, "blink", "/shelfblink", "BLINK");
+    append_post_button(&ptr, "shelf", "off", "OFF");
+    append_post_button(&ptr, "shelf", "blink", "BLINK");
   } else if (shelfstatus == Off) {
     ptr +="<p>Shelf Status: OFF</p>";
-    append_post_button(&ptr, "on", "/shelfon", "ON");
-    append_post_button(&ptr, "blink", "/shelfblink", "BLINK");
+    append_post_button(&ptr, "shelf", "on", "ON");
+    append_post_button(&ptr, "shelf", "blink", "BLINK");
   } else {
     ptr +="<p>Shelf Status: BLINK</p>";
-    append_post_button(&ptr, "on", "/shelfon", "ON");
-    append_post_button(&ptr, "off", "/shelfoff", "OFF");
+    append_post_button(&ptr, "shelf", "on", "ON");
+    append_post_button(&ptr, "shelf", "off", "OFF");
   }
 
   ptr += posthtml;
