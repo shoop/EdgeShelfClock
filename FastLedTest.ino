@@ -32,15 +32,23 @@ CRGB shelfleds[NR_SHELF_LEDS];
 enum StripState {
   Off = 0,
   On = 1,
-  Blink = 2,
+};
+
+// Numbered backwards for easy offsets
+enum ClockDigit {
+  M2 = 0,
+  M1 = 1,
+  H2 = 2,
+  H1 = 3,
 };
 
 enum StripState clockstatus = Off;
-uint8_t clockblinkstatus = LOW;
 enum StripState shelfstatus = Off;
-uint8_t shelfblinkstatus = LOW;
 
 #define FRAMES_PER_SECOND  60
+
+// Uncomment for the real clock, otherwise 8 test leds are used
+// #define REAL_CLOCK_STRIP 1
 
 // Webserver configuration
 ESP8266WebServer server(80);
@@ -131,57 +139,118 @@ void setup()
   Serial.printf("Accepting connections at http://%s\n", WiFi.localIP().toString().c_str());
 }
 
+void clearClock()
+{
+  fill_solid(clockleds, NR_CLOCK_LEDS, CRGB::Black);
+}
+
+void setClockDigitTest(int value, ClockDigit digit, CRGB color)
+{
+  // Use the first 8 leds I have on the test strip to "display the time"
+  int offset = digit * 2;
+  CRGB mapping[5] = { CRGB::Red, CRGB::Blue, CRGB::Yellow, CRGB::Green, CRGB::White };
+
+  switch (value % 10) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+      fill_solid(&clockleds[offset], 1, mapping[value % 5]);
+      break;
+    case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
+      fill_solid(&clockleds[offset], 1, mapping[value % 5]);
+      fill_solid(&clockleds[offset + 1], 1, color);
+      break;
+  }
+}
+
+void setClockDigitReal(int value, ClockDigit digit, CRGB color)
+{
+  int offset = digit * NR_DIGIT_LEDS;
+  switch (value % 10) {
+    case 0:
+      fill_solid(&clockleds[offset], 27, color);
+      fill_solid(&clockleds[offset + 36], 27, color);
+      break;
+    case 1:
+      fill_solid(&clockleds[offset], 9, color);
+      fill_solid(&clockleds[offset + 36], 9, color);
+      break;
+    case 2:
+      fill_solid(&clockleds[offset], 18, color);
+      fill_solid(&clockleds[offset + 27], 9, color);
+      fill_solid(&clockleds[offset + 45], 18, color);
+      break;
+    case 3:
+      fill_solid(&clockleds[offset], 18, color);
+      fill_solid(&clockleds[offset + 27], 27, color);
+      break;
+    case 4:
+      fill_solid(&clockleds[offset], 9, color);
+      fill_solid(&clockleds[offset + 18], 27, color);
+      break;
+    case 5:
+      fill_solid(&clockleds[offset + 9], 45, color);
+      break;
+    case 6:
+      fill_solid(&clockleds[offset + 9], 54, color);
+      break;
+    case 7:
+      fill_solid(&clockleds[offset], 18, color);
+      fill_solid(&clockleds[offset + 36], 9, color);
+      break;
+    case 8:
+      fill_solid(&clockleds[offset], 63, color);
+      break;
+    case 9:
+      fill_solid(&clockleds[offset], 45, color);
+      break;
+  }
+}
+
+void clearShelf()
+{
+  fill_solid(shelfleds, NR_SHELF_LEDS, CRGB::Black);
+}
+
+void turnShelfOn()
+{
+  fill_solid(shelfleds, NR_SHELF_LEDS, CRGB::Fuchsia);
+}
+
 void loop()
 {
-  EVERY_N_MILLISECONDS(300) {
-    if ((clockstatus == On) || (clockstatus == Blink && clockblinkstatus == LOW)) {
-      clockleds[0] = CRGB::White;
-      clockleds[1] = CRGB::White;
-      clockleds[2] = CRGB::White;
-      clockleds[3] = CRGB::White;
-      clockleds[4] = CRGB::White;
-      clockleds[5] = CRGB::White;
-      clockleds[6] = CRGB::White;
-      clockleds[7] = CRGB::White;
-      clockleds[8] = CRGB::White;
-      clockblinkstatus = HIGH;
-    } else if ((clockstatus == Off) || (clockstatus == Blink && clockblinkstatus == HIGH)) {
-      clockleds[0] = CRGB::Black;
-      clockleds[1] = CRGB::Black;
-      clockleds[2] = CRGB::Black;
-      clockleds[3] = CRGB::Black;
-      clockleds[4] = CRGB::Black;
-      clockleds[5] = CRGB::Black;
-      clockleds[6] = CRGB::Black;
-      clockleds[7] = CRGB::Black;
-      clockleds[8] = CRGB::Black;
-      clockblinkstatus = LOW;        
+  EVERY_N_MILLISECONDS(200) {
+    clearClock();
+    if (clockstatus == On) {
+      acetime_t now = systemClock.getNow();
+      auto tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Amsterdam, &zoneProcessor);
+      auto currentDateTime = ZonedDateTime::forEpochSeconds(now, tz);
+      uint8_t minute = currentDateTime.minute();
+      uint8_t hour = currentDateTime.hour();
+#if defined(REAL_CLOCK_STRIP)
+      setClockDigitReal(minute % 10, M2, CRGB::Peru);
+      setClockDigitReal(minute / 10, M1, CRGB::PowderBlue);
+      setClockDigitReal(hour % 10, H2, CRGB::Salmon);
+      setClockDigitReal(hour / 10, H1, CRGB::LawnGreen);
+#else
+      uint8_t seconds = currentDateTime.second();
+      setClockDigitTest(seconds % 10, M2, CRGB::Peru);
+      setClockDigitTest(seconds / 10, M1, CRGB::PowderBlue);
+      setClockDigitTest(minute % 10, H2, CRGB::Salmon);
+      setClockDigitTest(minute / 10, H1, CRGB::LawnGreen);
+#endif
     }
-  }
 
-  EVERY_N_MILLISECONDS(300) {
-    if ((shelfstatus == On) || (shelfstatus == Blink && shelfblinkstatus == LOW)) {
-      shelfleds[0] = CRGB::White;
-      shelfleds[1] = CRGB::White;
-      shelfleds[2] = CRGB::White;
-      shelfleds[3] = CRGB::White;
-      shelfleds[4] = CRGB::White;
-      shelfleds[5] = CRGB::White;
-      shelfleds[6] = CRGB::White;
-      shelfleds[7] = CRGB::White;
-      shelfleds[8] = CRGB::White;
-      shelfblinkstatus = HIGH;
-    } else if ((shelfstatus == Off) || (shelfstatus == Blink && shelfblinkstatus == HIGH)) {
-      shelfleds[0] = CRGB::Black;
-      shelfleds[1] = CRGB::Black;
-      shelfleds[2] = CRGB::Black;
-      shelfleds[3] = CRGB::Black;
-      shelfleds[4] = CRGB::Black;
-      shelfleds[5] = CRGB::Black;
-      shelfleds[6] = CRGB::Black;
-      shelfleds[7] = CRGB::Black;
-      shelfleds[8] = CRGB::Black;
-      shelfblinkstatus = LOW;
+    if (shelfstatus == On) {
+      turnShelfOn();
+    } else if (shelfstatus == Off) {
+      clearShelf();
     }
   }
 
@@ -241,16 +310,12 @@ void handle_set() {
       clockstatus = On;
     } else if (selection == "off") {
       clockstatus = Off;
-    } else if (selection == "blink") {
-      clockstatus = Blink;
     }
   } else if (lights == "shelf") {
     if (selection == "on") {
       shelfstatus = On;
     } else if (selection == "off") {
       shelfstatus = Off;
-    } else if (selection == "blink") {
-      shelfstatus = Blink;
     }
   }
 
@@ -277,29 +342,17 @@ String generate_html(){
   if (clockstatus == On) {
     ptr +="<p>Clock Status: ON</p>";
     append_post_button(&ptr, "clock", "off", "OFF");
-    append_post_button(&ptr, "clock", "blink", "BLINK");
   } else if (clockstatus == Off) {
     ptr +="<p>Clock Status: OFF</p>";
     append_post_button(&ptr, "clock", "on", "ON");
-    append_post_button(&ptr, "clock", "blink", "BLINK");
-  } else {
-    ptr +="<p>Clock Status: BLINK</p>";
-    append_post_button(&ptr, "clock", "on", "ON");
-    append_post_button(&ptr, "clock", "off", "OFF");
   }
 
   if (shelfstatus == On) {
     ptr +="<p>Shelf Status: ON</p>";
     append_post_button(&ptr, "shelf", "off", "OFF");
-    append_post_button(&ptr, "shelf", "blink", "BLINK");
   } else if (shelfstatus == Off) {
     ptr +="<p>Shelf Status: OFF</p>";
     append_post_button(&ptr, "shelf", "on", "ON");
-    append_post_button(&ptr, "shelf", "blink", "BLINK");
-  } else {
-    ptr +="<p>Shelf Status: BLINK</p>";
-    append_post_button(&ptr, "shelf", "on", "ON");
-    append_post_button(&ptr, "shelf", "off", "OFF");
   }
 
   ptr += posthtml;
