@@ -1,20 +1,19 @@
+// WiFi connection
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
-#include <LittleFS.h>
 
 /*
  * Enter your SSID & Password here to connect for the first time.
- * Once the sketch has been run at least once, the values will be stored in the LittleFS filesystem.
- * You can then safely remove them from here again.
+ * Once the sketch has been run at least once, the values will be stored
+ * on the ESP8266 by the WiFi system. You can then safely remove them
+ * from here again and leave the empty string -- this will reconnect
+ * to your previous AP.
  */
 const char *ssid = "";
 const char *password = "";
 
-// Stores the WiFi configuration
-struct WifiData {
-  char ssid[20] = "";
-  char password[20] = "";
-} wifiData;
+// Filesystem
+#include <LittleFS.h>
 
 // LED configuration
 #define FASTLED_ESP8266_RAW_PIN_ORDER
@@ -43,15 +42,15 @@ uint8_t shelfblinkstatus = LOW;
 
 #define FRAMES_PER_SECOND  60
 
-// Webserver Configuration
+// Webserver configuration
 ESP8266WebServer server(80);
 String prehtml;
 String posthtml;
 
 // Real time clock and NTP
 #include <Wire.h>
-#define RTC_SDA_PIN 4 // GPIO4 aka D2
-#define RTC_SCL_PIN 5 // GPIO5 aka D1
+#define I2S_SDA_PIN 4 // GPIO4 aka D2
+#define I2S_SCL_PIN 5 // GPIO5 aka D1
 
 #include <AceRoutine.h>
 #include <AceTime.h>
@@ -71,49 +70,31 @@ void setup()
   Serial.println();
 
   // Set up leds
-  Serial.println(F("Setting up pixel strips on pin 5 and pin 4"));
-  FastLED.addLeds<NEOPIXEL, 14>(clockleds, NR_CLOCK_LEDS);
-  FastLED.addLeds<NEOPIXEL, 12>(shelfleds, NR_SHELF_LEDS);
+  Serial.printf("Setting up clock pixel strip on pin %d\n", CLOCK_PIN);
+  FastLED.addLeds<NEOPIXEL, CLOCK_PIN>(clockleds, NR_CLOCK_LEDS);
+  Serial.printf("Setting up shelf pixel strip on pin %d\n", SHELF_PIN);
+  FastLED.addLeds<NEOPIXEL, SHELF_PIN>(shelfleds, NR_SHELF_LEDS);
 
   // Set up filesystem
   LittleFS.begin();
 
   // Set up WiFi
-  Serial.println(F("Getting WiFi configuration from file system"));
-  File conf = LittleFS.open("/wifi.cfg", "r");
-  if (!conf) {
-    Serial.println(F("WiFi configuration file does not exist, writing default values..."));
-    conf = LittleFS.open("/wifi.cfg", "w");
-    conf.write(ssid, strlen(ssid));
-    conf.write("\n");
-    conf.write(password, strlen(password));
-    conf.write("\n");
-    strncpy(wifiData.ssid, ssid, 20);
-    wifiData.ssid[19] = '\0';
-    strncpy(wifiData.password, password, 20);
-    wifiData.password[19] = '\0';
+  if (ssid != "") {
+    Serial.printf("Connecting to SSID \"%s\"", ssid);
   } else {
-    Serial.println(F("WiFi configuration file found, reading values..."));
-    String SSID = conf.readStringUntil('\n');
-    strncpy(wifiData.ssid, SSID.c_str(), 20);
-    wifiData.ssid[19] = '\0';
-    String PASS = conf.readStringUntil('\n');
-    strncpy(wifiData.password, PASS.c_str(), 20);
-    wifiData.password[19] = '\0';
-    conf.close();
+    Serial.print(F("Connecting to previously defined AP"));
   }
-
-  Serial.printf("Connecting to SSID \"%s\"", wifiData.ssid);
-  WiFi.begin(wifiData.ssid, wifiData.password);
+  WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
   }
   Serial.println("");
-  Serial.printf("Connected with IP %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("Connected, IP %s\n", WiFi.localIP().toString().c_str());
 
   // Set up RTC and NTP
-  Wire.begin(RTC_SDA_PIN, RTC_SCL_PIN);
+  Serial.printf("Setting up I2S bus SDA pin %d SCL pin %d\n", I2S_SDA_PIN, I2S_SCL_PIN);
+  Wire.begin(I2S_SDA_PIN, I2S_SCL_PIN);
   Serial.println(F("Setting up DS3231Clock"));
   dsClock.setup();
   Serial.println(F("Setting up NTP"));
@@ -123,7 +104,7 @@ void setup()
   CoroutineScheduler::setup();
 
   // Print current RTC time for debugging
-  Serial.print("RTC current date/time: ");
+  Serial.print(F("RTC current date/time at startup: "));
   auto tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Amsterdam, &zoneProcessor);
   acetime_t rtcNow = dsClock.getNow();
   auto rtcDateTime = ZonedDateTime::forEpochSeconds(rtcNow, tz);
@@ -147,7 +128,7 @@ void setup()
   server.begin();
 
   // Ready
-  Serial.println(F("Accepting connections"));
+  Serial.printf("Accepting connections at http://%s\n", WiFi.localIP().toString().c_str());
 }
 
 void loop()
