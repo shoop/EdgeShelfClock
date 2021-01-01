@@ -3,17 +3,21 @@
 #include <LittleFS.h>
 //#include <EEPROM.h>
 
-/* Enter your SSID & Password here to connect for the first time */
-const char* ssid = "";  // Enter SSID here
-const char* password = "";  //Enter Password here
+/*
+ * Enter your SSID & Password here to connect for the first time.
+ * Once the sketch has been run at least once, the values will be stored in the LittleFS filesystem.
+ * You can then safely remove them from here again.
+ */
+const char *ssid = "";
+const char *password = "";
 
+// Stores the WiFi configuration
 struct WifiData {
   char ssid[20] = "";
   char password[20] = "";
 } wifiData;
 
-ESP8266WebServer server(80);
-
+// LED configuration
 #define FASTLED_ESP8266_RAW_PIN_ORDER
 #include "FastLED.h"
 
@@ -38,16 +42,21 @@ uint8_t shelfblinkstatus = LOW;
 
 #define FRAMES_PER_SECOND  60
 
+// Webserver Configuration
+ESP8266WebServer server(80);
+
 void setup()
 {
   Serial.begin(115200);
   delay(1000);
   Serial.println();
-  Serial.println("Setting up pixel strips on pin 5 and pin 4");
 
+  // Set up leds
+  Serial.println("Setting up pixel strips on pin 5 and pin 4");
   FastLED.addLeds<NEOPIXEL, 5>(clockleds, NR_CLOCK_LEDS);
   FastLED.addLeds<NEOPIXEL, 4>(shelfleds, NR_SHELF_LEDS);
 
+  // Set up WiFi
   Serial.println("Getting WiFi configuration from file system");
   LittleFS.begin();
   File conf = LittleFS.open("/wifi.cfg", "r");
@@ -74,19 +83,16 @@ void setup()
   }
 
   Serial.printf("Connecting to SSID \"%s\"", ssid);
-
-  //connect to your local wi-fi network
   WiFi.begin(ssid, password);
-
-  //check wi-fi is connected to wi-fi network
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
   }
   Serial.println("");
-
   Serial.printf("Connected with IP %s\n", WiFi.localIP().toString().c_str());
 
+  // Set up webserver
+  Serial.println("Starting webserver...");
   server.on("/", handle_OnConnect);
   server.on("/strip1on", HTTP_POST, handle_strip1on);
   server.on("/strip1blink", HTTP_POST, handle_strip1blink);
@@ -94,14 +100,12 @@ void setup()
   server.on("/strip2on", HTTP_POST, handle_strip2on);
   server.on("/strip2blink", HTTP_POST, handle_strip2blink);
   server.on("/strip2off", HTTP_POST, handle_strip2off);
-
   server.on("/testing", handle_test);
-  
   server.onNotFound(handle_NotFound);
-
   server.begin();
-  Serial.println("HTTP server started");
- 
+
+  // Ready
+  Serial.println("Accepting connections");
 }
 
 void loop()
