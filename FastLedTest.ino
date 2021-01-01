@@ -1,7 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <LittleFS.h>
-//#include <EEPROM.h>
 
 /*
  * Enter your SSID & Password here to connect for the first time.
@@ -20,6 +19,8 @@ struct WifiData {
 // LED configuration
 #define FASTLED_ESP8266_RAW_PIN_ORDER
 #include "FastLED.h"
+#define CLOCK_PIN 14 // GPIO14 aka D5
+#define SHELF_PIN 12 // GPIO12 aka D6
 
 #define NR_LINE_LEDS 9
 #define NR_DIGIT_LEDS (NR_LINE_LEDS * 7)
@@ -47,6 +48,22 @@ ESP8266WebServer server(80);
 String prehtml;
 String posthtml;
 
+// Real time clock and NTP
+#include <Wire.h>
+#define RTC_SDA_PIN 4 // GPIO4 aka D2
+#define RTC_SCL_PIN 5 // GPIO5 aka D1
+
+#include <AceRoutine.h>
+#include <AceTime.h>
+using namespace ace_routine;
+using namespace ace_time;
+using namespace ace_time::clock;
+
+DS3231Clock dsClock;
+NtpClock ntpClock("europe.pool.ntp.org");
+SystemClockCoroutine systemClock(&ntpClock, &dsClock);
+static BasicZoneProcessor zoneProcessor;
+
 void setup()
 {
   Serial.begin(115200);
@@ -54,18 +71,18 @@ void setup()
   Serial.println();
 
   // Set up leds
-  Serial.println("Setting up pixel strips on pin 5 and pin 4");
-  FastLED.addLeds<NEOPIXEL, 5>(clockleds, NR_CLOCK_LEDS);
-  FastLED.addLeds<NEOPIXEL, 4>(shelfleds, NR_SHELF_LEDS);
+  Serial.println(F("Setting up pixel strips on pin 5 and pin 4"));
+  FastLED.addLeds<NEOPIXEL, 14>(clockleds, NR_CLOCK_LEDS);
+  FastLED.addLeds<NEOPIXEL, 12>(shelfleds, NR_SHELF_LEDS);
 
   // Set up filesystem
   LittleFS.begin();
 
   // Set up WiFi
-  Serial.println("Getting WiFi configuration from file system");
+  Serial.println(F("Getting WiFi configuration from file system"));
   File conf = LittleFS.open("/wifi.cfg", "r");
   if (!conf) {
-    Serial.println("WiFi configuration file does not exist, writing default values...");
+    Serial.println(F("WiFi configuration file does not exist, writing default values..."));
     conf = LittleFS.open("/wifi.cfg", "w");
     conf.write(ssid, strlen(ssid));
     conf.write("\n");
@@ -76,7 +93,7 @@ void setup()
     strncpy(wifiData.password, password, 20);
     wifiData.password[19] = '\0';
   } else {
-    Serial.println("WiFi configuration file found, reading values...");
+    Serial.println(F("WiFi configuration file found, reading values..."));
     String SSID = conf.readStringUntil('\n');
     strncpy(wifiData.ssid, SSID.c_str(), 20);
     wifiData.ssid[19] = '\0';
@@ -95,17 +112,35 @@ void setup()
   Serial.println("");
   Serial.printf("Connected with IP %s\n", WiFi.localIP().toString().c_str());
 
+  // Set up RTC and NTP
+  Wire.begin(RTC_SDA_PIN, RTC_SCL_PIN);
+  Serial.println(F("Setting up DS3231Clock"));
+  dsClock.setup();
+  Serial.println(F("Setting up NTP"));
+  ntpClock.setup();
+  Serial.println(F("Setting up SystemClock coroutine"));
+  systemClock.setupCoroutine(F("systemClock"));
+  CoroutineScheduler::setup();
+
+  // Print current RTC time for debugging
+  Serial.print("RTC current date/time: ");
+  auto tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Amsterdam, &zoneProcessor);
+  acetime_t rtcNow = dsClock.getNow();
+  auto rtcDateTime = ZonedDateTime::forEpochSeconds(rtcNow, tz);
+  rtcDateTime.printTo(Serial);
+  Serial.println();
+
   // Set up webserver
   File templ = LittleFS.open("/template.html", "r");
   if (!templ) {
-    Serial.println("ERROR: HTML template /template.html not found, looping!");
+    Serial.println(F("ERROR: HTML template /template.html not found, looping!"));
     while (1) ;
   }
   prehtml = templ.readStringUntil('@');
   posthtml = templ.readString();
   templ.close();
 
-  Serial.println("Starting webserver...");
+  Serial.println(F("Starting webserver..."));
   server.on("/", handle_connect);
   server.on("/clockon", HTTP_POST, handle_clockon);
   server.on("/clockblink", HTTP_POST, handle_clockblink);
@@ -117,7 +152,7 @@ void setup()
   server.begin();
 
   // Ready
-  Serial.println("Accepting connections");
+  Serial.println(F("Accepting connections"));
 }
 
 void loop()
@@ -174,9 +209,20 @@ void loop()
     }
   }
 
+  EVERY_N_MILLISECONDS(30000) {
+    acetime_t now = systemClock.getNow();
+    Serial.print("Current date/time: ");
+    auto tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Amsterdam, &zoneProcessor);
+    auto currentDateTime = ZonedDateTime::forEpochSeconds(now, tz);
+    currentDateTime.printTo(Serial);
+    Serial.println();
+  }
+
   FastLED.show();
   
   server.handleClient();
+
+  CoroutineScheduler::loop();
 
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 }
