@@ -106,15 +106,14 @@ void setup()
   templ.close();
 
   Serial.println("Starting webserver...");
-  server.on("/", handle_OnConnect);
-  server.on("/strip1on", HTTP_POST, handle_strip1on);
-  server.on("/strip1blink", HTTP_POST, handle_strip1blink);
-  server.on("/strip1off", HTTP_POST, handle_strip1off);
-  server.on("/strip2on", HTTP_POST, handle_strip2on);
-  server.on("/strip2blink", HTTP_POST, handle_strip2blink);
-  server.on("/strip2off", HTTP_POST, handle_strip2off);
-  server.on("/testing", handle_test);
-  server.onNotFound(handle_NotFound);
+  server.on("/", handle_connect);
+  server.on("/clockon", HTTP_POST, handle_clockon);
+  server.on("/clockblink", HTTP_POST, handle_clockblink);
+  server.on("/clockoff", HTTP_POST, handle_clockoff);
+  server.on("/shelfon", HTTP_POST, handle_shelfon);
+  server.on("/shelfblink", HTTP_POST, handle_shelfblink);
+  server.on("/shelfoff", HTTP_POST, handle_shelfoff);
+  server.onNotFound(handle_notfound);
   server.begin();
 
   // Ready
@@ -182,60 +181,53 @@ void loop()
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 }
 
-void handle_OnConnect() {
-  server.send(200, "text/html", SendHTML()); 
+void handle_connect() {
+  server.send(200, "text/html", generate_html()); 
 }
 
-void handle_strip1on() {
+void handle_clockon() {
   clockstatus = On;
-  Serial.println("Strip 1: ON");
+  Serial.println("Clock: ON");
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_strip1off() {
+void handle_clockoff() {
   clockstatus = Off;
-  Serial.println("Strip 1: OFF");
+  Serial.println("Clock: OFF");
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_strip1blink() {
+void handle_clockblink() {
   clockstatus = Blink;
-  Serial.println("Strip 1: Blink");
+  Serial.println("Clock: Blink");
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_strip2on() {
+void handle_shelfon() {
   shelfstatus = On;
-  Serial.println("Strip 2: ON");
+  Serial.println("Shelf: ON");
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_strip2off() {
+void handle_shelfoff() {
   shelfstatus = Off;
-  Serial.println("Strip 2: OFF");
+  Serial.println("Shelf: OFF");
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_strip2blink() {
+void handle_shelfblink() {
   shelfstatus = Blink;
-  Serial.println("Strip 2: Blink");
+  Serial.println("Shelf: Blink");
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
 }
 
-void handle_test() {
-  Serial.println("Serve test file");
-  File file = LittleFS.open("/test.txt", "r");
-  server.streamFile(file, "text/plain");
-  file.close();
-}
-
-void handle_NotFound(){
+void handle_notfound(){
   server.send(404, "text/plain", "Not found");
 }
 
@@ -245,36 +237,36 @@ void append_post_button(String *html, String buttonClass, String URL, String tex
     + text + "</button></form>\n";
 }
 
-String SendHTML(){
+String generate_html(){
   String ptr = "";
   ptr += prehtml;
   
   if (clockstatus == On) {
     ptr +="<p>Clock Status: ON</p>";
-    append_post_button(&ptr, "off", "/strip1off", "OFF");
-    append_post_button(&ptr, "blink", "/strip1blink", "BLINK");
+    append_post_button(&ptr, "off", "/clockoff", "OFF");
+    append_post_button(&ptr, "blink", "/clockblink", "BLINK");
   } else if (clockstatus == Off) {
     ptr +="<p>Clock Status: OFF</p>";
-    append_post_button(&ptr, "on", "/strip1on", "ON");
-    append_post_button(&ptr, "blink", "/strip1blink", "BLINK");
+    append_post_button(&ptr, "on", "/clockon", "ON");
+    append_post_button(&ptr, "blink", "/clockblink", "BLINK");
   } else {
     ptr +="<p>Clock Status: BLINK</p>";
-    append_post_button(&ptr, "on", "/strip1on", "ON");
-    append_post_button(&ptr, "off", "/strip1off", "OFF");
+    append_post_button(&ptr, "on", "/clockon", "ON");
+    append_post_button(&ptr, "off", "/clockoff", "OFF");
   }
 
   if (shelfstatus == On) {
     ptr +="<p>Shelf Status: ON</p>";
-    append_post_button(&ptr, "off", "/strip2off", "OFF");
-    append_post_button(&ptr, "blink", "/strip2blink", "BLINK");
+    append_post_button(&ptr, "off", "/shelfoff", "OFF");
+    append_post_button(&ptr, "blink", "/shelfblink", "BLINK");
   } else if (shelfstatus == Off) {
     ptr +="<p>Shelf Status: OFF</p>";
-    append_post_button(&ptr, "on", "/strip2on", "ON");
-    append_post_button(&ptr, "blink", "/strip2blink", "BLINK");
+    append_post_button(&ptr, "on", "/shelfon", "ON");
+    append_post_button(&ptr, "blink", "/shelfblink", "BLINK");
   } else {
     ptr +="<p>Shelf Status: BLINK</p>";
-    append_post_button(&ptr, "on", "/strip2on", "ON");
-    append_post_button(&ptr, "off", "/strip2off", "OFF");
+    append_post_button(&ptr, "on", "/shelfon", "ON");
+    append_post_button(&ptr, "off", "/shelfoff", "OFF");
   }
 
   ptr += posthtml;
