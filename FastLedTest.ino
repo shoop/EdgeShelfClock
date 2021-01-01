@@ -27,7 +27,9 @@ const char *password = "";
 #define NR_CLOCK_LEDS (NR_DIGITS * NR_DIGIT_LEDS)
 #define NR_SHELF_LEDS 14
 CRGB clockleds[NR_CLOCK_LEDS];
+CRGB clockcolor = CRGB::White;
 CRGB shelfleds[NR_SHELF_LEDS];
+CRGB shelfcolor = CRGB::White;
 
 enum StripState {
   Off = 0,
@@ -220,7 +222,7 @@ void clearShelf()
 
 void turnShelfOn()
 {
-  fill_solid(shelfleds, NR_SHELF_LEDS, CRGB::Fuchsia);
+  fill_solid(shelfleds, NR_SHELF_LEDS, shelfcolor);
 }
 
 void loop()
@@ -240,10 +242,10 @@ void loop()
       setClockDigitReal(hour / 10, H1, CRGB::LawnGreen);
 #else
       uint8_t seconds = currentDateTime.second();
-      setClockDigitTest(seconds % 10, M2, CRGB::Peru);
-      setClockDigitTest(seconds / 10, M1, CRGB::PowderBlue);
-      setClockDigitTest(minute % 10, H2, CRGB::Salmon);
-      setClockDigitTest(minute / 10, H1, CRGB::LawnGreen);
+      setClockDigitTest(seconds % 10, M2, clockcolor);
+      setClockDigitTest(seconds / 10, M1, clockcolor);
+      setClockDigitTest(minute % 10, H2, clockcolor);
+      setClockDigitTest(minute / 10, H1, clockcolor);
 #endif
     }
 
@@ -303,31 +305,73 @@ void handleSet()
     return;
   }
   String selection = server.arg("selection");
-  if (selection != "on" && selection != "off") {
+  if (selection != "on" && selection != "off" && selection != "color") {
     Serial.println(F("Invalid selection parameter send by browser"));
   }
-  
+
+  CRGB temp = CRGB::White;
+  if (selection == "color") {
+    if (!server.hasArg("color")) {
+      Serial.println(F("No color parameter send by browser"));
+      redirectToMain();
+      return;
+    }
+    String color = server.arg("color");
+    if (sscanf(color.c_str(), "rgb(%hhu,%hhu,%hhu)", &temp.r, &temp.g, &temp.b) != 3) {
+      Serial.println("Color parameter not in correct format, got " + color);
+      redirectToMain();
+      return;
+    }
+  }
+
   Serial.printf("%s: %s\n", lights.c_str(), selection.c_str());
   if (lights == "clock" ) {
     if (selection == "on") {
       clockstatus = On;
     } else if (selection == "off") {
       clockstatus = Off;
+    } else if (selection == "color") {
+      clockcolor = temp;
     }
   } else if (lights == "shelf") {
     if (selection == "on") {
       shelfstatus = On;
     } else if (selection == "off") {
       shelfstatus = Off;
+    } else if (selection == "color") {
+      shelfcolor = temp;
     }
   }
 
   redirectToMain();
 }
 
+String getContentType(String filename) {
+  if (filename.endsWith(".html")) return "text/html";
+  else if (filename.endsWith(".css")) return "text/css";
+  else if (filename.endsWith(".js")) return "application/javascript";
+  else if (filename.endsWith(".ico")) return "image/x-icon";
+  return "text/plain";
+}
+
+bool handleFileRead(String path)
+{
+  if (path.endsWith("/")) path += "index.html";
+  String contentType = getContentType(path);
+  if (!LittleFS.exists(path)) {
+    return false;
+  }
+
+  File file = LittleFS.open(path, "r");
+  size_t sent = server.streamFile(file, contentType);
+  file.close();
+  return true;
+}
+
 void handleNotFound()
 {
-  server.send(404, "text/plain", "Not found");
+  if (!handleFileRead(server.uri()))
+    server.send(404, "text/plain", "404: Not Found");  
 }
 
 void append_post_button(String *html, String strip, String selection, String text)
@@ -336,6 +380,17 @@ void append_post_button(String *html, String strip, String selection, String tex
         + "<button type=\"submit\" name=\"selection\" value=\"" + selection + "\" class=\"button button-" + selection + "\">"
         + text
         + "</button>"
+        + "</form>\n";
+}
+
+void append_color_picker(String *html, String strip, String text, CRGB current)
+{
+  char valbuf[18];
+  sprintf(valbuf, "rgb(%d,%d,%d)", current.r, current.g, current.b);
+  valbuf[17] = '\0';
+  *html += "<form method=\"post\" action=\"/set\"><input type=\"hidden\" name=\"lights\" value=\"" + strip + "\">"
+        + "Select " + strip + " color:<br/><input name=\"color\" data-jscolor=\"{format:'rgb'}\" value=\"" + valbuf + "\")>"
+        + "<button type=\"submit\" name=\"selection\" value=\"color\" class=\"button\">" + text + "</button>"
         + "</form>\n";
 }
 
@@ -352,6 +407,10 @@ String generateHtml()
     append_post_button(&ptr, "clock", "on", "ON");
   }
 
+  ptr += "<p>";
+  append_color_picker(&ptr, "clock", "SET", clockcolor);
+  ptr += "</p>";
+
   if (shelfstatus == On) {
     ptr +="<p>Shelf Status: ON</p>";
     append_post_button(&ptr, "shelf", "off", "OFF");
@@ -359,6 +418,10 @@ String generateHtml()
     ptr +="<p>Shelf Status: OFF</p>";
     append_post_button(&ptr, "shelf", "on", "ON");
   }
+
+  ptr += "<p>";
+  append_color_picker(&ptr, "shelf", "SET", shelfcolor);
+  ptr += "</p>";
 
   ptr += posthtml;
   return ptr;
