@@ -28,8 +28,10 @@ const char *password = "";
 #define NR_SHELF_LEDS 14
 CRGB clockleds[NR_CLOCK_LEDS];
 CRGB clockcolor = CRGB::White;
+int clockBrightness = 100;
 CRGB shelfleds[NR_SHELF_LEDS];
 CRGB shelfcolor = CRGB::White;
+int shelfBrightness = 100;
 
 enum StripState {
   Off = 0,
@@ -73,6 +75,13 @@ NtpClock ntpClock("europe.pool.ntp.org");
 SystemClockCoroutine systemClock(&ntpClock, &dsClock);
 static BasicZoneProcessor zoneProcessor;
 
+// Photoresistor
+#define NUM_READINGS  12
+int readings[NUM_READINGS];
+int readIndex = 0;
+long total = 0;
+long average = 0;
+
 void setup()
 {
   Serial.begin(115200);
@@ -84,6 +93,12 @@ void setup()
   FastLED.addLeds<NEOPIXEL, CLOCK_PIN>(clockleds, NR_CLOCK_LEDS);
   Serial.printf("Setting up shelf pixel strip on pin %d\n", SHELF_PIN);
   FastLED.addLeds<NEOPIXEL, SHELF_PIN>(shelfleds, NR_SHELF_LEDS);
+
+  // Initialize brightness settings
+  FastLED.setBrightness(100);
+  for (int i = 0; i < NUM_READINGS; i++) {
+    readings[i] = 0;
+  }
 
   // Set up filesystem
   LittleFS.begin();
@@ -105,7 +120,7 @@ void setup()
   // Set up RTC and NTP
   Serial.printf("Setting up I2S bus SDA pin %d SCL pin %d\n", I2S_SDA_PIN, I2S_SCL_PIN);
   Wire.begin(I2S_SDA_PIN, I2S_SCL_PIN);
-  Serial.println(F("Setting up DS3231Clock"));
+  Serial.println(F("Setting up DS3231 RTC"));
   dsClock.setup();
   Serial.println(F("Setting up NTP"));
   ntpClock.setup();
@@ -227,7 +242,27 @@ void turnShelfOn()
 
 void loop()
 {
+  EVERY_N_MILLISECONDS(1000) {
+    // Read brightness
+    int curBrightness = analogRead(0);
+    readings[readIndex] = curBrightness;
+    readIndex++;
+    if (readIndex >= NUM_READINGS) {
+      readIndex = 0;
+    }
+
+    // Calculate average so far 
+    int sumBrightness = 0;
+    for (int i = 0; i < NUM_READINGS; i++) {
+      sumBrightness += readings[i];
+    }
+    int avgBrightness = sumBrightness / NUM_READINGS;
+    clockBrightness = map(avgBrightness, 50, 1000, 220, 10);
+  }
+
   EVERY_N_MILLISECONDS(200) {
+    // Set clock and shelf leds
+    FastLED.setBrightness(clockBrightness);
     clearClock();
     if (clockstatus == On) {
       acetime_t now = systemClock.getNow();
@@ -236,10 +271,10 @@ void loop()
       uint8_t minute = currentDateTime.minute();
       uint8_t hour = currentDateTime.hour();
 #if defined(REAL_CLOCK_STRIP)
-      setClockDigitReal(minute % 10, M2, CRGB::Peru);
-      setClockDigitReal(minute / 10, M1, CRGB::PowderBlue);
-      setClockDigitReal(hour % 10, H2, CRGB::Salmon);
-      setClockDigitReal(hour / 10, H1, CRGB::LawnGreen);
+      setClockDigitReal(minute % 10, M2, clockcolor);
+      setClockDigitReal(minute / 10, M1, clockcolor);
+      setClockDigitReal(hour % 10, H2, clockcolor);
+      setClockDigitReal(hour / 10, H1, clockcolor);
 #else
       uint8_t seconds = currentDateTime.second();
       setClockDigitTest(seconds % 10, M2, clockcolor);
@@ -249,6 +284,7 @@ void loop()
 #endif
     }
 
+    FastLED.setBrightness(shelfBrightness);
     if (shelfstatus == On) {
       turnShelfOn();
     } else if (shelfstatus == Off) {
