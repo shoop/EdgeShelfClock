@@ -46,7 +46,7 @@ enum ClockDigit {
   H1 = 3,
 };
 
-enum StripState clockstatus = Off;
+enum StripState clockstatus = On;
 enum StripState shelfstatus = Off;
 
 #define FRAMES_PER_SECOND  60
