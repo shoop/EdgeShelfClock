@@ -1,3 +1,5 @@
+#define OTA_VERSION 3
+
 // WiFi connection
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -78,12 +80,23 @@ NtpClock ntpClock("europe.pool.ntp.org");
 SystemClockCoroutine systemClock(&ntpClock, &dsClock);
 static BasicZoneProcessor zoneProcessor;
 
+#define VERBOSE 0
+
 // Photoresistor
 #define NUM_READINGS  12
 int readings[NUM_READINGS];
 int readIndex = 0;
 long total = 0;
 long average = 0;
+
+// OTA
+#include <ArduinoOTA.h>
+#define OTA_HOSTNAME "edgeshelfclock"
+// admin123
+// Change to something for your environment
+#define OTA_PASSWORD_HASH "0192023a7bbd73250516f069df18b500"
+
+String otaVersion = String(OTA_VERSION);
 
 void setup()
 {
@@ -154,6 +167,45 @@ void setup()
   server.on("/set", HTTP_POST, handleSet);
   server.onNotFound(handleNotFound);
   server.begin();
+
+  // Set up OTA
+  ArduinoOTA.setPort(8266); // Default
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  ArduinoOTA.setPasswordHash(OTA_PASSWORD_HASH);
+
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else { // U_FS
+      type = "filesystem";
+    }
+
+    // NOTE: if updating FS this would be the place to unmount FS using FS.end()
+    LittleFS.end();
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
 
   // Ready
   Serial.printf("Accepting connections at http://%s\n", WiFi.localIP().toString().c_str());
@@ -245,6 +297,8 @@ void turnShelfOn()
 
 void loop()
 {
+  ArduinoOTA.handle();
+
   EVERY_N_MILLISECONDS(1000) {
     // Read brightness
     int curBrightness = analogRead(0);
@@ -297,11 +351,15 @@ void loop()
 
   EVERY_N_MILLISECONDS(30000) {
     acetime_t now = systemClock.getNow();
+#if VERBOSE
     Serial.print("Current date/time: ");
+#endif
     auto tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Amsterdam, &zoneProcessor);
     auto currentDateTime = ZonedDateTime::forEpochSeconds(now, tz);
+#if VERBOSE
     currentDateTime.printTo(Serial);
     Serial.println();
+#endif
   }
 
   FastLED.show();
@@ -461,6 +519,9 @@ String generateHtml()
   ptr += "<p>";
   append_color_picker(&ptr, "shelf", "SET", shelfcolor);
   ptr += "</p>";
+
+  // TEMP
+  ptr += "<p>Version " + otaVersion + "</p>";
 
   ptr += posthtml;
   return ptr;
