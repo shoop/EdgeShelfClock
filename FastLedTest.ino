@@ -26,12 +26,15 @@ const char *password = "";
 #define NR_DIGITS 4
 #define NR_CLOCK_LEDS (NR_DIGITS * NR_DIGIT_LEDS)
 #define NR_SHELF_LEDS 14
+
+#define MAX_BRIGHTNESS 128
+
 CRGB clockleds[NR_CLOCK_LEDS];
 CRGB clockcolor = CRGB::White;
-int clockBrightness = 100;
+int clockBrightness = MAX_BRIGHTNESS / 2;
 CRGB shelfleds[NR_SHELF_LEDS];
 CRGB shelfcolor = CRGB::White;
-int shelfBrightness = 100;
+int shelfBrightness = MAX_BRIGHTNESS / 2;
 
 enum StripState {
   Off = 0,
@@ -95,7 +98,7 @@ void setup()
   FastLED.addLeds<NEOPIXEL, SHELF_PIN>(shelfleds, NR_SHELF_LEDS);
 
   // Initialize brightness settings
-  FastLED.setBrightness(100);
+  FastLED.setBrightness(MAX_BRIGHTNESS);
   for (int i = 0; i < NUM_READINGS; i++) {
     readings[i] = 0;
   }
@@ -257,7 +260,7 @@ void loop()
       sumBrightness += readings[i];
     }
     int avgBrightness = sumBrightness / NUM_READINGS;
-    clockBrightness = map(avgBrightness, 50, 1000, 220, 10);
+    clockBrightness = map(avgBrightness, 50, 1000, MAX_BRIGHTNESS, 10);
   }
 
   EVERY_N_MILLISECONDS(200) {
