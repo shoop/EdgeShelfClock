@@ -19,7 +19,7 @@ const char *password = "";
 
 // LED configuration
 #define FASTLED_ESP8266_RAW_PIN_ORDER
-#include "FastLED.h"
+#include <FastLED.h>
 #define CLOCK_PIN 14 // GPIO14 aka D5
 #define SHELF_PIN 12 // GPIO12 aka D6
 

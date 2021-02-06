@@ -5,6 +5,7 @@
             "includePath": [
                 "/home/stijn/.arduino15/packages/esp8266/hardware/esp8266/2.7.4/libraries/Wire",
                 "/home/stijn/Arduino/libraries/**",
+                "/home/stijn/Arduino/libraries/FastLED/src",
                 "/home/stijn/.arduino15/packages/esp8266/hardware/esp8266/2.7.4/**",
                 "/home/stijn/.arduino15/packages/esp8266/tools/**"
             ],
