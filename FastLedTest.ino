@@ -52,7 +52,7 @@ enum StripState shelfstatus = Off;
 #define FRAMES_PER_SECOND  60
 
 // Uncomment for the real clock, otherwise 8 test leds are used
-// #define REAL_CLOCK_STRIP 1
+#define REAL_CLOCK_STRIP 1
 
 // Webserver configuration
 ESP8266WebServer server(80);
