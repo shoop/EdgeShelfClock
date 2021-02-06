@@ -6,14 +6,29 @@
         {
             "label": "Create LittleFS image",
             "type": "shell",
-            "command": "./tools/makeimage.sh",
+            "command": "${workspaceFolder}/tools/makeimage.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "problemMatcher": []
         },
         {
             "label": "Upload LittleFS image",
             "type": "shell",
-            "command": "./tools/uploadimage.sh",
+            "command": "${workspaceFolder}/tools/uploadimage.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "problemMatcher": []
-        }
+        },
+        {
+            "label": "Flash OTA",
+            "type": "shell",
+            "command": "${workspaceFolder}/tools/flashota.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
     ]
 }
