@@ -1,4 +1,4 @@
-#define OTA_VERSION 3
+#define OTA_VERSION 1
 
 // WiFi connection
 #include <ESP8266WiFi.h>
